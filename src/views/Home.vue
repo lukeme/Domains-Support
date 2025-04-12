@@ -1,0 +1,604 @@
+<template>
+    <div class="home-container">
+        <div class="header">
+            <h2>域名管理系统(Domains-Support)</h2>
+            <div class="header-buttons">
+                <el-button type="primary" size="small" :icon="Plus" @click="handleAdd">新建</el-button>
+                <el-button type="primary" size="small" :icon="Refresh" :loading="refreshing"
+                    @click="handleRefresh">刷新</el-button>
+                <el-button type="primary" size="small" :icon="Setting" @click="handleConfig">配置</el-button>
+                <el-button type="primary" size="small" :icon="SwitchButton" @click="handleLogout">登出</el-button>
+            </div>
+        </div>
+
+        <el-table :data="domains" border style="width: 100%" class="custom-table">
+            <el-table-column label="域名" align="center">
+                <template #default="scope">
+                    <a :href="'https://' + scope.row.domain" target="_blank" class="link">{{ scope.row.domain }}</a>
+                </template>
+            </el-table-column>
+            <el-table-column label="域名商" align="center">
+                <template #default="scope">
+                    <a :href="scope.row.registrar_link" target="_blank" class="link">{{ scope.row.registrar }}</a>
+                </template>
+            </el-table-column>
+            <el-table-column prop="registrar_date" label="注册时间" align="center" />
+            <el-table-column prop="expiry_date" label="过期时间" align="center" />
+            <el-table-column label="剩余时间" align="center">
+                <template #default="scope">
+                    <span :class="{ 'warning-text': calculateRemainingDays(scope.row.expiry_date) <= alertDays }">
+                        {{ calculateRemainingDays(scope.row.expiry_date) }}天
+                    </span>
+                </template>
+            </el-table-column>
+            <el-table-column prop="service_type" label="服务类型" align="center" />
+            <el-table-column prop="status" label="状态" align="center">
+                <template #default="scope">
+                    <span :class="scope.row.status === '在线' ? 'success-text' : 'danger-text'">
+                        {{ scope.row.status }}
+                    </span>
+                </template>
+            </el-table-column>
+            <el-table-column prop="memo" label="备注" align="center" />
+            <el-table-column label="操作" width="200" align="center">
+                <template #default="scope">
+                    <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(scope.row)">修改</el-button>
+                    <el-button type="danger" size="small" :icon="Delete" @click="handleDelete(scope.row)">删除</el-button>
+                </template>
+            </el-table-column>
+        </el-table>
+
+        <DomainDialog v-model:visible="dialogVisible" :is-edit="isEdit" :edit-data="editData"
+            @submit="handleDialogSubmit" />
+
+        <AlertConfigDialog v-model:visible="configVisible" :config="alertConfig" @submit="handleConfigSubmit" />
+
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="copyright">
+                    <span>© 2025 Domains-Support v1.0.0</span>
+                    <span class="separator">|</span>
+                    <span>作者：饭奇骏</span>
+                    <span class="separator">|</span>
+                    <div class="social-links">
+                        <a href="https://github.com/frankiejun/Domains-Support/tree/main" target="_blank"
+                            class="social-link" title="访问 GitHub 仓库">
+                            <el-icon class="social-icon"><svg viewBox="0 0 1024 1024" width="20" height="20">
+                                    <path fill="currentColor"
+                                        d="M512 0C229.12 0 0 229.12 0 512c0 226.56 146.56 417.92 350.08 485.76 25.6 4.48 35.2-10.88 35.2-24.32 0-12.16-0.64-52.48-0.64-95.36-128.64 23.68-161.92-31.36-172.16-60.16-5.76-14.72-30.72-60.16-52.48-72.32-17.92-9.6-43.52-33.28-0.64-33.92 40.32-0.64 69.12 37.12 78.72 52.48 46.08 77.44 119.68 55.68 149.12 42.24 4.48-33.28 17.92-55.68 32.64-68.48-113.92-12.8-232.96-56.96-232.96-252.8 0-55.68 19.84-101.76 52.48-137.6-5.12-12.8-23.04-65.28 5.12-135.68 0 0 42.88-13.44 140.8 52.48 40.96-11.52 84.48-17.28 128-17.28 43.52 0 87.04 5.76 128 17.28 97.92-66.56 140.8-52.48 140.8-52.48 28.16 70.4 10.24 122.88 5.12 135.68 32.64 35.84 52.48 81.28 52.48 137.6 0 196.48-119.68 240-233.6 252.8 18.56 16 34.56 46.72 34.56 94.72 0 68.48-0.64 123.52-0.64 140.8 0 13.44 9.6 29.44 35.2 24.32C877.44 929.92 1024 737.92 1024 512 1024 229.12 794.88 0 512 0z" />
+                                </svg></el-icon>
+                        </a>
+                        <a href="https://www.youtube.com/@frankiejun8965" target="_blank" class="social-link"
+                            title="访问 YouTube 频道">
+                            <el-icon class="social-icon"><svg viewBox="0 0 1024 1024" width="20" height="20">
+                                    <path fill="currentColor"
+                                        d="M941.3 296.1c-10.3-38.6-40.7-69-79.3-79.3C792.2 198 512 198 512 198s-280.2 0-350 18.7c-38.6 10.3-69 40.7-79.3 79.3C64 365.9 64 512 64 512s0 146.1 18.7 215.9c10.3 38.6 40.7 69 79.3 79.3C231.8 826 512 826 512 826s280.2 0 350-18.7c38.6-10.3 69-40.7 79.3-79.3C960 658.1 960 512 960 512s0-146.1-18.7-215.9zM423 646V378l232 134-232 134z" />
+                                </svg></el-icon>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Setting, Refresh, Plus, Edit, Delete, SwitchButton } from '@element-plus/icons-vue'
+import { useAuth } from '../utils/auth'
+import DomainDialog from '../components/DomainDialog.vue'
+import AlertConfigDialog from '../components/AlertConfigDialog.vue'
+import { createDomain, updateDomain, deleteDomain, type DomainData } from '../api/domains'
+
+type Domain = DomainData
+
+interface AlertConfig {
+    tg_token: string
+    tg_userid: string
+    days: number
+}
+
+interface ApiResponse<T = any> {
+    status: number
+    message: string
+    data: T
+}
+
+const router = useRouter()
+const auth = useAuth()
+const domains = ref<Domain[]>([])
+const alertDays = ref(30)
+const alertConfig = ref<AlertConfig>()
+const refreshing = ref(false)
+
+// 对话框相关的状态
+const dialogVisible = ref(false)
+const configVisible = ref(false)
+const isEdit = ref(false)
+const editData = ref<Domain>()
+
+const checkLoginStatus = () => {
+    const token = auth.getAuthToken()
+    if (!token) {
+        router.push({ name: 'Login' })
+    }
+}
+
+const handleLogout = () => {
+    auth.clearAuth()
+    router.push({ name: 'Login' })
+}
+
+const handleAdd = () => {
+    isEdit.value = false
+    editData.value = undefined
+    dialogVisible.value = true
+}
+
+const handleEdit = (row: Domain) => {
+    isEdit.value = true
+    editData.value = row
+    dialogVisible.value = true
+}
+
+const handleDelete = async (row: Domain) => {
+    try {
+        await ElMessageBox.confirm('确定要删除该域名吗？', '提示', {
+            type: 'warning'
+        })
+
+        if (row.id) {
+            await deleteDomain(row.id)
+            ElMessage.success('删除成功')
+            await loadDomains()
+        }
+    } catch (error) {
+        if (error !== 'cancel') {
+            ElMessage.error('删除失败')
+        }
+    }
+}
+
+const handleDialogSubmit = async (formData: Omit<Domain, 'id' | 'created_at'>) => {
+    try {
+        console.log('提交的表单数据:', formData)
+        if (isEdit.value && editData.value?.id) {
+            const response = await updateDomain(editData.value.id, formData)
+            console.log('更新响应:', response)
+            ElMessage.success('修改成功')
+        } else {
+            const response = await createDomain(formData)
+            console.log('创建响应:', response)
+            ElMessage.success('添加成功')
+        }
+        dialogVisible.value = false
+        await loadDomains()
+    } catch (error: any) {
+        console.error('保存失败:', error)
+        console.error('错误响应:', error.response?.data)
+        ElMessage.error(error.response?.data?.message || (isEdit.value ? '修改失败' : '添加失败'))
+    }
+}
+
+const loadDomains = async () => {
+    try {
+        console.log('开始加载域名列表')
+        const authData = auth.getAuthToken()
+        if (!authData) {
+            throw new Error('未登录或登录已过期')
+        }
+
+        const response = await fetch('/api/domains', {
+            headers: {
+                'Authorization': `Bearer ${authData.token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+        console.log('域名列表原始响应:', response)
+
+        if (!response.ok) {
+            const errorData = await response.json() as ApiResponse<null>
+            throw new Error(errorData.message || '请求失败')
+        }
+
+        const result = await response.json() as ApiResponse<Domain[]>
+        console.log('解析后的响应:', result)
+
+        if (result.status !== 200) {
+            throw new Error(result.message || '请求失败')
+        }
+
+        domains.value = result.data || []
+        console.log('设置域名列表成功:', domains.value)
+    } catch (error: any) {
+        console.error('加载域名列表失败:', error)
+        console.error('错误详情:', {
+            message: error.message,
+            stack: error.stack
+        })
+        ElMessage.error(error.message || '加载域名列表失败')
+        if (error.message === '未授权访问' || error.message === '无效的访问令牌') {
+            auth.clearAuth()
+            router.push({ name: 'Login' })
+        }
+    }
+}
+
+const calculateRemainingDays = (expiryDate: string) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const expiry = new Date(expiryDate)
+    expiry.setHours(0, 0, 0, 0)
+    const diffTime = expiry.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    if (diffDays < 0) {
+        return 0
+    }
+    return diffDays
+}
+
+const handleConfig = () => {
+    configVisible.value = true
+}
+
+const handleConfigSubmit = async (config: AlertConfig) => {
+    try {
+        const authData = auth.getAuthToken()
+        if (!authData) {
+            throw new Error('未登录或登录已过期')
+        }
+
+        const response = await fetch('/api/alertconfig', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authData.token}`
+            },
+            body: JSON.stringify(config)
+        })
+
+        const result = await response.json() as ApiResponse<AlertConfig>
+
+        if (result.status === 200) {
+            ElMessage.success('配置保存成功')
+            alertDays.value = config.days
+            alertConfig.value = config
+        } else {
+            throw new Error(result.message || '保存失败')
+        }
+    } catch (error: unknown) {
+        console.error('保存配置失败:', error)
+        if (error instanceof Error) {
+            ElMessage.error(error.message)
+            if (error.message === '未授权访问' || error.message === '无效的访问令牌') {
+                auth.clearAuth()
+                router.push({ name: 'Login' })
+            }
+        } else {
+            ElMessage.error('保存配置失败')
+        }
+    }
+}
+
+const updateDomainStatus = async (domain: string, status: string): Promise<Domain> => {
+    try {
+        const authData = auth.getAuthToken()
+        if (!authData) {
+            throw new Error('未登录或登录已过期')
+        }
+
+        const response = await fetch('/api/domains/status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authData.token}`
+            },
+            body: JSON.stringify({ domain, status })
+        })
+
+        const result = await response.json() as ApiResponse<Domain>
+
+        if (result.status === 200) {
+            //ElMessage.success('状态更新成功')
+            return result.data
+        } else {
+            throw new Error(result.message || '更新失败')
+        }
+    } catch (error: unknown) {
+        console.error('更新状态失败:', error)
+        if (error instanceof Error) {
+            ElMessage.error(error.message)
+            if (error.message === '未授权访问' || error.message === '无效的访问令牌') {
+                auth.clearAuth()
+                router.push({ name: 'Login' })
+            }
+        } else {
+            ElMessage.error('更新状态失败')
+        }
+        throw error
+    }
+}
+
+const checkDomainStatus = async (domain: string): Promise<string> => {
+    try {
+        const authData = auth.getAuthToken()
+        if (!authData) {
+            throw new Error('未登录或登录已过期')
+        }
+
+        const response = await fetch('/api/domains/check', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authData.token}`
+            },
+            body: JSON.stringify({ domain })
+        })
+
+        const result = await response.json() as ApiResponse<{ status: string }>
+
+        if (result.status === 200) {
+            return result.data.status
+        } else {
+            throw new Error(result.message || '检查失败')
+        }
+    } catch (error) {
+        console.error(`检查域名 ${domain} 状态失败:`, error)
+        return '离线'
+    }
+}
+
+const handleRefresh = async () => {
+    if (refreshing.value) return
+
+    try {
+        refreshing.value = true
+        ElMessage.info('正在检查域名状态...')
+
+        // 并行检查所有域名状态
+        const statusChecks = domains.value.map(async (domain) => {
+            const status = await checkDomainStatus(domain.domain)
+            const updatedDomain = await updateDomainStatus(domain.domain, status)
+            return updatedDomain
+        })
+
+        // 等待所有检查完成
+        const updatedDomains = await Promise.all(statusChecks)
+        domains.value = updatedDomains
+        ElMessage.success('状态刷新完成')
+    } catch (error: unknown) {
+        console.error('刷新状态失败:', error)
+        ElMessage.error(error instanceof Error ? error.message : '刷新状态失败')
+    } finally {
+        refreshing.value = false
+    }
+}
+
+// 在组件加载时获取告警配置
+const loadAlertConfig = async () => {
+    try {
+        const authData = auth.getAuthToken()
+        if (!authData) {
+            throw new Error('未登录或登录已过期')
+        }
+
+        const response = await fetch('/api/alertconfig', {
+            headers: {
+                'Authorization': `Bearer ${authData.token}`,
+                'Content-Type': 'application/json'
+            }
+        })
+        const result = await response.json() as ApiResponse<AlertConfig>
+
+        if (result.status === 200 && result.data) {
+            alertConfig.value = result.data
+            alertDays.value = result.data.days
+        } else {
+            throw new Error(result.message || '获取配置失败')
+        }
+    } catch (error: unknown) {
+        console.error('获取告警配置失败:', error)
+        if (error instanceof Error) {
+            if (error.message === '未授权访问' || error.message === '无效的访问令牌') {
+                auth.clearAuth()
+                router.push({ name: 'Login' })
+            }
+        }
+    }
+}
+
+onMounted(async () => {
+    checkLoginStatus()
+    await Promise.all([loadDomains(), loadAlertConfig()])
+})
+</script>
+
+<style scoped>
+.home-container {
+    padding: 20px;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+    padding-bottom: 60px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.header h2 {
+    margin: 0;
+    color: #1976D2;
+    font-size: 24px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.header-buttons {
+    display: flex;
+    gap: 2px;
+}
+
+.custom-table {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.link {
+    color: #409EFF;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.link:hover {
+    color: #66b1ff;
+    text-decoration: underline;
+}
+
+.warning-text {
+    color: #E6A23C;
+    font-weight: bold;
+}
+
+.success-text {
+    color: #67C23A;
+    font-weight: bold;
+}
+
+.danger-text {
+    color: #F56C6C;
+    font-weight: bold;
+}
+
+:deep(.el-table) {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+:deep(.el-table th) {
+    background-color: #f5f7fa !important;
+}
+
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+    background-color: #fafafa;
+}
+
+:deep(.el-button) {
+    border-radius: 4px;
+}
+
+/* 添加图标的过渡效果 */
+.el-icon {
+    margin-right: 4px;
+    transition: transform 0.3s;
+}
+
+.el-button:hover .el-icon {
+    transform: rotate(180deg);
+}
+
+.header-buttons .el-button {
+    min-width: 88px;
+    transition: all 0.3s;
+}
+
+.header-buttons .el-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header-buttons .el-button [class*="el-icon"] {
+    margin-right: 4px;
+    transition: transform 0.3s;
+}
+
+.header-buttons .el-button:not(.is-loading):hover [class*="el-icon"] {
+    transform: rotate(180deg);
+}
+
+/* 表格中的按钮样式 */
+.el-table .el-button {
+    transition: all 0.3s;
+}
+
+.el-table .el-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.el-table .el-button [class*="el-icon"] {
+    margin-right: 4px;
+}
+
+/* 加载状态的特殊样式 */
+.el-button.is-loading {
+    opacity: 0.8;
+    cursor: not-allowed;
+}
+
+.el-button.is-loading [class*="el-icon"] {
+    animation: none;
+}
+
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 16px;
+    background: white;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.copyright {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.separator {
+    color: #dcdfe6;
+    margin: 0 2px;
+}
+
+.social-links {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    margin-left: 2px;
+}
+
+.social-link {
+    color: #666;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+}
+
+.social-link:hover {
+    color: #409EFF;
+    transform: translateY(-2px);
+}
+
+.social-icon {
+    width: 20px;
+    height: 20px;
+}
+</style>
