@@ -1,0 +1,12 @@
+[pages]
+directory = "dist"
+
+[pages.build]
+command = "npm run build"
+
+[pages.functions]
+directory = "functions"
+
+[pages.env]
+USER = "admin"
+PASS = "admin123" 
