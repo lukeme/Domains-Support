@@ -64,8 +64,94 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             const remainingDays = calculateRemainingDays(domain.expiry_date)
             console.log(`检查域名 ${domain.domain}: 过期时间 ${domain.expiry_date}, 剩余天数 ${remainingDays}`)
 
+            // 检查网站连通性
+            let isOnline = false
+            try {
+                const controller = new AbortController()
+                const timeoutPromise = new Promise<Response>((_, reject) => {
+                    setTimeout(() => {
+                        controller.abort()
+                        reject(new Error('Timeout'))
+                    }, 5000)
+                })
+
+                // 先尝试 HTTP 协议
+                const httpFetchPromise = fetch(`http://${domain.domain}`, {
+                    method: 'GET',
+                    redirect: 'follow',
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept': '*/*'
+                    }
+                })
+
+                try {
+                    const response = await Promise.race([httpFetchPromise, timeoutPromise])
+                    if (response instanceof Response) {
+                        const contentType = response.headers.get('content-type')
+                        const contentLength = response.headers.get('content-length')
+                        if ((response.status >= 200 && response.status < 400) &&
+                            (contentType || contentLength)) {
+                            isOnline = true
+                        }
+                    }
+                } catch (httpError) {
+                    console.error(`HTTP 检查域名 ${domain.domain} 失败:`, httpError)
+                    // 如果 HTTP 失败，尝试 HTTPS
+                    const httpsFetchPromise = fetch(`https://${domain.domain}`, {
+                        method: 'GET',
+                        redirect: 'follow',
+                        signal: controller.signal,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        }
+                    })
+
+                    try {
+                        const response = await Promise.race([httpsFetchPromise, timeoutPromise])
+                        if (response instanceof Response) {
+                            const contentType = response.headers.get('content-type')
+                            const contentLength = response.headers.get('content-length')
+                            if ((response.status >= 200 && response.status < 400) &&
+                                (contentLength || contentType)) {
+                                isOnline = true
+                            }
+                        }
+                    } catch (httpsError) {
+                        console.error(`HTTPS 检查域名 ${domain.domain} 失败:`, httpsError)
+                    }
+                }
+            } catch (error) {
+                console.error(`检查域名 ${domain.domain} 失败:`, error)
+            }
+
+            // 更新域名状态
+            const newStatus = isOnline ? '在线' : '离线'
+            await context.env.DB.prepare(
+                'UPDATE domains SET status = ? WHERE domain = ?'
+            ).bind(newStatus, domain.domain).run()
+
+            // 如果状态变为离线且启用了通知，发送 Telegram 消息
+            if (newStatus === '离线') {
+                const message = `*🔔 Domains-Support 通知*\n\n` +
+                    `⚠️ *域名服务离线告警*\n\n` +
+                    `🌐 域名：\`${domain.domain}\`\n` +
+                    `📊 状态：离线\n` +
+                    `⏰ 时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n\n` +
+                    `🔍 请检查网站服务状态！`
+
+                try {
+                    await sendTelegramMessage(config.tg_token, config.tg_userid, message)
+                    console.log(`成功发送离线通知：${domain.domain}`)
+                } catch (error) {
+                    console.error(`发送离线通知失败:`, error)
+                }
+            }
+
+            // 检查域名是否即将过期
             if (remainingDays <= config.days) {
-                console.log(`域名 ${domain.domain} 需要发送通知：剩余天数(${remainingDays}) <= 阈值(${config.days})`)
+                console.log(`域名 ${domain.domain} 需要发送过期通知：剩余天数(${remainingDays}) <= 阈值(${config.days})`)
                 const message = `*🔔 Domains-Support通知*\n\n` +
                     `🌐 域名：\`${domain.domain}\`\n` +
                     `📅 过期时间：\`${domain.expiry_date}\`\n` +
@@ -73,17 +159,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
                     `⚠️ 剩余天数告警，请尽快进行续约！`
 
                 try {
-                    console.log('准备发送 Telegram 消息...')
+                    console.log('准备发送过期通知...')
                     await sendTelegramMessage(config.tg_token, config.tg_userid, message)
-                    console.log(`成功发送 Telegram 通知：${domain.domain}`)
+                    console.log(`成功发送过期通知：${domain.domain}`)
                     notifiedDomains.push({
                         domain: domain.domain,
                         remainingDays,
                         expiry_date: domain.expiry_date
                     })
                 } catch (error) {
-                    console.error(`发送 Telegram 消息失败:`, error)
-                    throw error
+                    console.error(`发送过期通知失败:`, error)
                 }
             }
         }

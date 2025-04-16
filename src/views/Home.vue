@@ -1,5 +1,5 @@
 <template>
-    <div class="home-container">
+    <div class="home-container" :class="{ 'dark-mode': isDarkMode }">
         <div class="header">
             <h2>域名管理系统(Domains-Support)</h2>
             <div class="header-buttons">
@@ -8,6 +8,9 @@
                     @click="handleRefresh">刷新</el-button>
                 <el-button type="primary" size="small" :icon="Setting" @click="handleConfig">配置</el-button>
                 <el-button type="primary" size="small" :icon="SwitchButton" @click="handleLogout">登出</el-button>
+                <el-button type="primary" size="small" :icon="isDarkMode ? Sunny : Moon" @click="toggleDarkMode">
+                    {{ isDarkMode ? '日间模式' : '夜间模式' }}
+                </el-button>
             </div>
         </div>
 
@@ -56,7 +59,7 @@
         <footer class="footer">
             <div class="footer-content">
                 <div class="copyright">
-                    <span>© 2025 Domains-Support v1.0.0</span>
+                    <span>© 2025 Domains-Support v1.0.1</span>
                     <span class="separator">|</span>
                     <span>作者：饭奇骏</span>
                     <span class="separator">|</span>
@@ -86,7 +89,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Setting, Refresh, Plus, Edit, Delete, SwitchButton } from '@element-plus/icons-vue'
+import { Setting, Refresh, Plus, Edit, Delete, SwitchButton, Sunny, Moon } from '@element-plus/icons-vue'
 import { useAuth } from '../utils/auth'
 import DomainDialog from '../components/DomainDialog.vue'
 import AlertConfigDialog from '../components/AlertConfigDialog.vue'
@@ -118,6 +121,9 @@ const dialogVisible = ref(false)
 const configVisible = ref(false)
 const isEdit = ref(false)
 const editData = ref<Domain>()
+
+// 暗黑模式状态
+const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
 
 const checkLoginStatus = () => {
     const token = auth.getAuthToken()
@@ -409,29 +415,55 @@ const loadAlertConfig = async () => {
     }
 }
 
-onMounted(async () => {
+// 切换暗黑模式
+const toggleDarkMode = () => {
+    isDarkMode.value = !isDarkMode.value
+    localStorage.setItem('darkMode', isDarkMode.value.toString())
+    document.documentElement.classList.toggle('dark', isDarkMode.value)
+}
+
+// 初始化暗黑模式
+onMounted(() => {
+    if (isDarkMode.value) {
+        document.documentElement.classList.add('dark')
+    }
     checkLoginStatus()
-    await Promise.all([loadDomains(), loadAlertConfig()])
+    loadDomains()
+    loadAlertConfig()
 })
 </script>
 
 <style scoped>
 .home-container {
-    padding: 20px;
     min-height: 100vh;
+    padding: 20px;
+    padding-bottom: 80px;
     background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
-    padding-bottom: 60px;
+    transition: background 0.3s ease;
+}
+
+.home-container.dark-mode {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: #ffffff;
 }
 
 .header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
     margin-bottom: 20px;
+    align-items: center;
+    justify-content: space-between;
     background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
     padding: 15px 20px;
     border-radius: 8px;
     box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.dark-mode .header {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: #ffffff;
 }
 
 .header h2 {
@@ -439,17 +471,49 @@ onMounted(async () => {
     color: #1976D2;
     font-size: 24px;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.dark-mode .header h2 {
+    color: #64B5F6;
 }
 
 .header-buttons {
     display: flex;
-    gap: 2px;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .custom-table {
+    margin-bottom: 60px;
+    overflow-x: auto;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.dark-mode .custom-table {
+    background: #2d2d2d;
+    color: #ffffff;
+}
+
+:deep(.el-table) {
+    width: 100% !important;
+    white-space: nowrap;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.dark-mode :deep(.el-table) {
+    --el-table-border-color: #404040;
+    --el-table-header-bg-color: #2d2d2d;
+    --el-table-row-hover-bg-color: #404040;
+    --el-table-current-row-bg-color: #404040;
+    --el-table-header-text-color: #ffffff;
+    --el-table-text-color: #ffffff;
+    --el-table-bg-color: #2d2d2d;
 }
 
 .link {
@@ -478,20 +542,25 @@ onMounted(async () => {
     font-weight: bold;
 }
 
-:deep(.el-table) {
-    border-radius: 8px;
-    overflow: hidden;
-}
-
 :deep(.el-table th) {
     background-color: #f5f7fa !important;
+}
+
+.dark-mode :deep(.el-table th) {
+    background-color: #2d2d2d !important;
+    color: #ffffff !important;
+    font-weight: bold;
 }
 
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
     background-color: #fafafa;
 }
 
-:deep(.el-button) {
+.dark-mode :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+    background-color: #333333;
+}
+
+.el-button {
     border-radius: 4px;
 }
 
@@ -556,20 +625,30 @@ onMounted(async () => {
     padding: 16px;
     background: white;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.dark-mode .footer {
+    background: #2d2d2d;
+    color: #ffffff;
 }
 
 .footer-content {
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
 }
 
 .copyright {
     display: flex;
-    align-items: center;
-    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    font-size: 14px;
 }
 
 .separator {
@@ -578,14 +657,13 @@ onMounted(async () => {
 }
 
 .social-links {
-    display: inline-flex;
-    gap: 4px;
+    display: flex;
+    gap: 15px;
     align-items: center;
-    margin-left: 2px;
 }
 
 .social-link {
-    color: #666;
+    color: #606266;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
@@ -600,5 +678,140 @@ onMounted(async () => {
 .social-icon {
     width: 20px;
     height: 20px;
+}
+
+@media (max-width: 768px) {
+    .home-container {
+        padding: 15px;
+        padding-bottom: 70px;
+    }
+
+    .header {
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .header h2 {
+        font-size: 1.2rem;
+    }
+
+    .custom-table {
+        margin-bottom: 15px;
+    }
+
+    .footer {
+        padding: 10px;
+        height: auto;
+        min-height: 50px;
+    }
+
+    .footer-content {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+    }
+
+    .copyright {
+        font-size: 0.8rem;
+        gap: 6px;
+    }
+
+    .social-links {
+        gap: 10px;
+    }
+
+    .social-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    :deep(.el-table) {
+        font-size: 0.9rem;
+    }
+
+    :deep(.el-table th),
+    :deep(.el-table td) {
+        padding: 8px 4px;
+    }
+
+    :deep(.el-button) {
+        padding: 6px 12px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .home-container {
+        padding: 10px;
+        padding-bottom: 60px;
+    }
+
+    .header {
+        padding: 10px;
+    }
+
+    .header-buttons {
+        gap: 5px;
+    }
+
+    .footer {
+        padding: 8px;
+        min-height: 45px;
+    }
+
+    .copyright {
+        font-size: 0.75rem;
+    }
+}
+</style>
+
+<style>
+/* 全局暗黑模式样式 */
+.dark {
+    --el-bg-color: #1a1a1a;
+    --el-bg-color-overlay: #2d2d2d;
+    --el-text-color-primary: #ffffff;
+    --el-text-color-regular: #e0e0e0;
+    --el-border-color: #404040;
+    --el-border-color-light: #404040;
+    --el-border-color-lighter: #404040;
+    --el-border-color-extra-light: #404040;
+    --el-fill-color-blank: #2d2d2d;
+    --el-mask-color: rgba(0, 0, 0, 0.8);
+}
+
+.dark .el-dialog {
+    --el-dialog-bg-color: #2d2d2d;
+    --el-dialog-title-font-color: #ffffff;
+}
+
+.dark .el-card {
+    --el-card-bg-color: #2d2d2d;
+}
+
+/* 移除按钮的暗黑模式样式 */
+.dark .el-button {
+    --el-button-bg-color: var(--el-color-primary);
+    --el-button-border-color: var(--el-color-primary);
+    --el-button-hover-bg-color: var(--el-color-primary-light-3);
+    --el-button-hover-border-color: var(--el-color-primary-light-3);
+}
+
+.dark .el-button--danger {
+    --el-button-bg-color: var(--el-color-danger);
+    --el-button-border-color: var(--el-color-danger);
+    --el-button-hover-bg-color: var(--el-color-danger-light-3);
+    --el-button-hover-border-color: var(--el-color-danger-light-3);
+}
+
+.dark .el-input {
+    --el-input-bg-color: #2d2d2d;
+    --el-input-text-color: #ffffff;
+    --el-input-border-color: #404040;
+}
+
+.dark .el-select {
+    --el-select-border-color-hover: #505050;
+    --el-select-input-focus-border-color: #505050;
 }
 </style>

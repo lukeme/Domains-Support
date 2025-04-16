@@ -8,6 +8,8 @@ export interface Env {
     ASSETS: {
         fetch: typeof fetch
     }
+    TELEGRAM_BOT_TOKEN: string
+    TELEGRAM_CHAT_ID: string
 }
 
 export interface Domain {
