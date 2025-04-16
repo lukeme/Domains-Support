@@ -101,7 +101,7 @@
 
 ### 2. 域名列表 API
 
-**端点**: `/api/domains`
+**端点**: `/api/addrec`
 **方法**: POST
 **认证**: 需要 Bearer Token
 
